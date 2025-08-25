@@ -39,6 +39,7 @@ if [[ $LANG =~ ru_RU.UTF ]] ; then
     [Secureboot is enabled in the BIOS, before using this script you need to import the key for signing dkms modules for ryzen_smu in mokutil]="Secureboot включен в BIOS, перед использованием этого скрипта необходимо импортировать ключ для подписи модулей dkms для ryzen_smu в mokutil"
     [Reboot your device, import the key and run the script again]="Перезагрузите устройство, импортируйте ключ и снова запустите скрипт"
     [Secureboot is enabled in BIOS, /var/lib/dkms/mok.pub for signing dkms modules for ryzen_smu is missing, disable secureboot or add the key for signing dkms modules to mokutil]="Secureboot включен в BIOS, /var/lib/dkms/mok.pub для подписи модулей dkms для ryzen_smu отсутствует, отключите Secureboot или добавьте ключ для подписи модулей dkms в mokutil"
+    [[You can use any password]]="Вы можете использовать любой пароль"
     )
 else
     declare -A translations=(
@@ -79,5 +80,6 @@ else
     [Secureboot is enabled in the BIOS, before using this script you need to import the key for signing dkms modules for ryzen_smu in mokutil]="Secureboot is enabled in the BIOS, before using this script you need to import the key for signing dkms modules for ryzen_smu in mokutil"
     [Reboot your device, import the key and run the script again]="Reboot your device, import the key and run the script again"
     [Secureboot is enabled in BIOS, /var/lib/dkms/mok.pub for signing dkms modules for ryzen_smu is missing, disable secureboot or add the key for signing dkms modules to mokutil]="Secureboot is enabled in BIOS, /var/lib/dkms/mok.pub for signing dkms modules for ryzen_smu is missing, disable secureboot or add the key for signing dkms modules to mokutil"
+    [[You can use any password]]="You can use any password"
     )
 fi

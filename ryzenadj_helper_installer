@@ -49,12 +49,13 @@ else
             CHECK_DKMS_SIGN=$(mokutil --list-enrolled | grep -i dkms)
             if [[ -f /var/lib/dkms/mok.pub ]] && [[ ${SECUREBOOT_STATUS[1]} == enabled ]] && [[ -z $CHECK_DKMS_SIGN ]] ; then
                 echo "${translations[Secureboot is enabled in the BIOS, before using this script you need to import the key for signing dkms modules for ryzen_smu in mokutil]}"
+                echo "${translations[You can use any password]}"
                 mokutil --import /var/lib/dkms/mok.pub
                 echo "${translations[Reboot your device, import the key and run the script again]}"
-                sleep 5 && exit 0
+                sleep 3 && exit 0
             elif [[ ! -f /var/lib/dkms/mok.pub ]] && [[ ${SECUREBOOT_STATUS[1]} == enabled ]] && [[ -z $CHECK_DKMS_KEY ]] ; then
                 echo "${translations[Secureboot is enabled in BIOS, /var/lib/dkms/mok.pub for signing dkms modules for ryzen_smu is missing, disable secureboot or add the key for signing dkms modules to mokutil]}"
-                sleep 5 && exit 1
+                sleep 3 && exit 1
             fi
 
             echo "${translations[Enter the maximum TDP of the processor from the power cable in watts]}$arg1_info:"
