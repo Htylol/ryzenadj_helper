@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+if [[ $LANG =~ ru_RU.UTF ]] ; then
+    declare -A translations=(
+    [There is no systemd-run systemctl in the system, without it it will not work]="В системе нет systemd-run systemctl, без этого работать не будет"
+    [Usage: ./ryzenadj_helper_installer <command>
+
+<commands>
+  i|install : Installation
+  u|uninstall : Deletes all files after installation
+
+  WARNING: Superuser rights required]="Использовать: ./ryzenadj_helper_installer <команда>
+
+<команды>
+  i|install : Установка
+  u|uninstall : Удалить все файлы после установки
+
+  ВНИМАНИЕ: Требуются права суперпользователя"
+    [Superuser rights are required]="Необходимы права суперпользователя"
+    [sudo or doas not found!]="sudo or doas не найдены!"
+    [(default 25)]="(по умолчанию 25)"
+    [(default 15)]="(по умолчанию 15)"
+    [(default 35)]="(по умолчанию 35)"
+    [(default 20)]="(по умолчанию 20)"
+    [Enter the maximum TDP of the processor from the power cable in watts]="Введите максимальный TDP процессора от кабеля питания в ваттах"
+    [Enter the maximum TDP of the processor from the battery in watts]="Введите максимальный TDP процессора от батареи в ваттах"
+    [Enter the maximum allowed CPU temperature in Celsius (default 70)]="Введите максимально допустимую температуру процессора в градусах Цельсия (по умолчанию 70)"
+    [Enter the maximum allowed APU temperature in Celsius (default 70)]="Введите максимально допустимую температуру APU в градусах Цельсия (по умолчанию 70)"
+    [Enter the maximum TDP of the processor from the power cable in watts from a weak charge (default 25)]="Введите максимальный TDP процессора от кабеля питания в ваттах от слабой зарядки (по умолчанию 25)"
+    [Enter which profile to use (vantage) after reboot or shutdown, this is necessary for the second system, for example Windows]="Введите, какой профиль (vantage) использовать после перезагрузки или выключения, это необходимо для второй системы, например Windows"
+    [Available profiles: performance, balanced, low-power (balanced by default)]="Доступные профили: performance, balanced, low-power (по умолчанию balanced)"
+    [Incorrect profile (vantage) selected, default profile will be used]="Выбран неправильный профиль (vantage), будет использован профиль по умолчанию"
+    [Secureboot is disabled in the system, install the ryzen_smu kernel module?]="Secureboot отключен в системе, установить модуль ядра ryzen_smu?"
+    [May improve compatibility with ryzenadj]="Может улучшить совместимость работы с ryzenadj"
+    [Select y/yes or n/no (default yes)]="Выбор y/yes или n/no (по умолчанию yes)"
+    [Invalid argument used, exiting in 3 seconds]="Был использован неправильный аргумент, выход через 3 секунды"
+    [Add a timer to the system so that the device turns off automatically during prolonged sleep]="Добавьте в систему таймер, чтобы устройство автоматически выключалось при длительном сне"
+    [Similar to hibernation, but without saving the current session]="По аналогии с гибернацией, только без сохранения текущий сессии"
+    [How long to turn off the device during long sleep in minutes (default 180)]="Через какой период времени устройство выключать во время длительного сна в минутах (по умолчанию 180)"
+    [For help, please use './ryzenadj_helper_installer help']="Для получения справки используйте './ryzenadj_helper_installer help'"
+    )
+else
+    declare -A translations=(
+    [There is no systemd-run systemctl in the system, without it it will not work]="There is no systemd-run systemctl in the system, without it it will not work"
+    [Usage: ./ryzenadj_helper_installer <command>
+
+<commands>
+  i|install : Installation
+  u|uninstall : Deletes all files after installation
+
+  WARNING: Superuser rights required]="Usage: ./ryzenadj_helper_installer <command>
+
+<commands>
+  i|install : Installation
+  u|uninstall : Deletes all files after installation
+
+  WARNING: Superuser rights required"
+    [Superuser rights are required]="Superuser rights are required"
+    [sudo or doas not found!]="sudo or doas not found!"
+    [(default 25)]="(default 25)"
+    [(default 15)]="(default 15)"
+    [(default 35)]="(default 35)"
+    [(default 20)]="(default 20)"
+    [Enter the maximum TDP of the processor from the power cable in watts]="Enter the maximum TDP of the processor from the power cable in watts"
+    [Enter the maximum TDP of the processor from the battery in watts]="Enter the maximum TDP of the processor from the battery in watts"
+    [Enter the maximum allowed CPU temperature in Celsius (default 70)]="Enter the maximum allowed CPU temperature in Celsius (default 70)"
+    [Enter the maximum allowed APU temperature in Celsius (default 70)]="Enter the maximum allowed APU temperature in Celsius (default 70)"
+    [Enter the maximum TDP of the processor from the power cable in watts from a weak charge (default 25)]="Enter the maximum TDP of the processor from the power cable in watts from a weak charge (default 25)"
+    [Enter which profile to use (vantage) after reboot or shutdown, this is necessary for the second system, for example Windows]="Enter which profile to use (vantage) after reboot or shutdown, this is necessary for the second system, for example Windows"
+    [Available profiles: performance, balanced, low-power (balanced by default)]="Available profiles: performance, balanced, low-power (balanced by default)"
+    [Incorrect profile (vantage) selected, default profile will be used]="Incorrect profile (vantage) selected, default profile will be used"
+    [Secureboot is disabled in the system, install the ryzen_smu kernel module?]="Secureboot is disabled in the system, install the ryzen_smu kernel module?"
+    [May improve compatibility with ryzenadj]="May improve compatibility with ryzenadj"
+    [Select y/yes or n/no (default yes)]="Select y/yes or n/no (default yes)"
+    [Invalid argument used, exiting in 3 seconds]="Invalid argument used, exiting in 3 seconds"
+    [Add a timer to the system so that the device turns off automatically during prolonged sleep]="Add a timer to the system so that the device turns off automatically during prolonged sleep"
+    [Similar to hibernation, but without saving the current session]="Similar to hibernation, but without saving the current session"
+    [How long to turn off the device during long sleep in minutes (default 180)]="How long to turn off the device during long sleep in minutes (default 180)"
+    [For help, please use './ryzenadj_helper_installer help']="For help, please use './ryzenadj_helper_installer help'"
+    )
+fi

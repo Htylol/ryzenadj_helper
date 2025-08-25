@@ -1,30 +1,94 @@
 #!/usr/bin/env bash
 
+SCRIPTS_PATH="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+source "$SCRIPTS_PATH/translations"
+
+if ! command -v systemd-run systemctl &>/dev/null ; then
+    echo "${translations[There is no systemd-run systemctl in the system, without it it will not work]}"
+    exit 1
+fi
+
 if [[ -z $1 ]] || [[ $1 =~ (h|help) ]] ; then
-    echo "Usage: ./ryzenadj_helper_installer <command>
+    echo "${translations[Usage: ./ryzenadj_helper_installer <command>
 
 <commands>
   i|install : Installation
   u|uninstall : Deletes all files after installation
 
-  WARNING: Superuser rights required
+  WARNING: Superuser rights required]}
 "
     exit 0
 fi
 
 if [[ $(id -u) != "0" ]] ; then
-    echo "Superuser rights are required"
-    if command -v sudo &>/dev/null ; then sudo ./"$0" "$@"
-    elif command -v doas &>/dev/null ; then doas ./"$0" "$@"
-    else echo "sudo or doas not found!"
+    echo "${translations[Superuser rights are required]}"
+    if command -v sudo &>/dev/null ; then sudo "$0" "$@"
+    elif command -v doas &>/dev/null ; then doas "$0" "$@"
+    else echo "${translations[sudo or doas not found!]}"
     fi
 else
-    SCRIPTS_PATH="$(cd "$(dirname "$0")" && pwd)"
     cd "$SCRIPTS_PATH" || exit 1
     INSTALL_DIR="/usr/local/"
     [[ ! -d $INSTALL_DIR/bin ]] && mkdir -p $INSTALL_DIR/bin
     [[ ! -d $INSTALL_DIR/lib/systemd/system ]] && mkdir -p $INSTALL_DIR/lib/systemd/system
     [[ ! -d $INSTALL_DIR/lib/udev/rules.d ]] && mkdir -p $INSTALL_DIR/lib/udev/rules.d
+
+    custom_args_ryzenadj() {
+            # Honor Magicbook 5500U
+            if [[ $(</sys/class/dmi/id/product_version) == M1060 ]] ; then
+                arg1_info=" ${translations[(default 25)]})"
+                arg2_info=" ${translations[(default 15)]}"
+            # Thinkbook G6+ AHP
+            elif [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
+                arg1_info=" ${translations[(default 35)]}"
+                arg2_info=" ${translations[(default 20)]}"
+            fi
+
+            echo "${translations[Enter the maximum TDP of the processor from the power cable in watts]}$arg1_info:"
+            read -r arg1
+            echo "${translations[Enter the maximum TDP of the processor from the battery in watts]}$arg2_info:"
+            read -r arg2
+            echo "${translations[Enter the maximum allowed CPU temperature in Celsius (default 70)]}:"
+            read -r arg3
+            echo "${translations[Enter the maximum allowed APU temperature in Celsius (default 70)]}:"
+            read -r arg4
+            if [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
+                echo "${translations[Enter the maximum TDP of the processor from the power cable in watts from a weak charge (default 25)]}:"
+                read -r arg5
+                echo "${translations[Enter which profile to use (vantage) after reboot or shutdown, this is necessary for the second system, for example Windows]}"
+                echo "${translations[Available profiles: performance, balanced, low-power (balanced by default)]}:"
+                read -r arg6
+                if [[ -n $arg6 ]] && [[ ! $arg6 =~ (performance|balanced|low-power) ]] ; then
+                    echo "${translations[Incorrect profile (vantage) selected, default profile will be used]}"
+                    sleep 5
+                    unset arg6
+                fi
+            fi
+            IFS=' ' read -r -a SECUREBOOT_STATUS < <(mokutil --sb-state)
+            if [[ ${SECUREBOOT_STATUS[1]} != "enabled" ]] ; then
+                echo "${translations[Secureboot is disabled in the system, install the ryzen_smu kernel module?]}"
+                echo "${translations[May improve compatibility with ryzenadj]}"
+                echo "${translations[Select y/yes or n/no (default yes)]}:"
+                read -r arg7
+                if [[ -n $arg7 ]] && [[ ! $arg7 =~ (y|yes|n|no) ]] ; then
+                    echo "${translations[Invalid argument used, exiting in 3 seconds]}"
+                    sleep 3 && exit 1
+                fi
+            fi
+            echo "${translations[Add a timer to the system so that the device turns off automatically during prolonged sleep]}"
+            echo "${translations[Similar to hibernation, but without saving the current session]}"
+            echo "${translations[Select y/yes or n/no (default yes)]}:"
+            read -r arg8
+            if [[ -n $arg8 ]] && [[ ! $arg8 =~ (y|yes|n|no) ]] ; then
+                echo "${translations[Invalid argument used, exiting in 3 seconds]}"
+                sleep 3 && exit 1
+            fi
+            if [[ -z $arg8 ]] || [[ $arg8 =~ (y|yes) ]] ; then
+                echo "${translations[How long to turn off the device during long sleep in minutes (default 180)]}:"
+                read -r arg9
+            fi
+    }
 
     ryzenadj_install() {
         [[ -d RyzenAdj ]] && rm -r RyzenAdj
@@ -44,30 +108,47 @@ else
         echo "ryzenadj_uninstall done"
     }
 
-    ryzensmu_install() {
+    ryzen_smu_install() {
         [[ -d ryzen_smu ]] && rm -r ryzen_smu
         git clone https://github.com/Htylol/ryzen_smu.git
         cd ryzen_smu || exit 1
-        ryzensmu_uninstall
+        ryzen_smu_uninstall
         make dkms-install
         cd "$SCRIPTS_PATH" && rm -r ryzen_smu || exit 1
-        echo "ryzensmu_install done"
+        if [[ -e /sys/module/amd_pmc ]] ; then
+            cat << EOF > /usr/lib/systemd/system-sleep/ryzen_smu
+#!/usr/bin/env sh
+
+case \$1 in
+    pre)  modprobe -r ryzen_smu ;;
+    post) modprobe ryzen_smu ;;
+esac
+EOF
+            chmod 755 /usr/lib/systemd/system-sleep/ryzen_smu
+        fi
+        echo "ryzen_smu_install done"
     }
 
-    ryzensmu_uninstall() {
+    ryzen_smu_uninstall() {
         while true ; do
             IFS='/' read -r -a DKMS_STATUS < <(dkms status | grep ryzen_smu)
-            if [[ -n $DKMS_STATUS ]]
-            then dkms remove ryzen_smu/${DKMS_STATUS[1]/[,:]*/} --all
+            if [[ -n ${DKMS_STATUS[0]} ]]
+            then dkms remove ryzen_smu/"${DKMS_STATUS[1]/[,:]*/}" --all
             else break
             fi
         done
-        echo "ryzensmu_uninstall done"
+        echo "ryzen_smu_uninstall done"
     }
 
     ryzenadj_helper_install() {
-        # Thinkbook G6+ AHP
+        [[ -z $arg3 ]] && arg3=70
+        [[ -z $arg4 ]] && arg4=70
+
         if [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
+            [[ -z $arg1 ]] && arg1=35
+            [[ -z $arg2 ]] && arg2=20
+            [[ -z $arg5 ]] && arg5=25
+            [[ -z $arg6 ]] && arg6=balanced
             cat << EOF > $INSTALL_DIR/bin/ryzenadj_helper
 #!/usr/bin/env bash
 
@@ -78,22 +159,44 @@ case \$1 in
             sleep 5
             if [[ \$(</sys/class/power_supply/ucsi-source-psy-USBC000:001/charge_type) == "Standard" ]] \\
             || [[ \$(</sys/class/power_supply/ucsi-source-psy-USBC000:002/charge_type) == "Standard" ]]
-            then ryzenadj -a 25000 -b 25000 -c 25000 --max-performance -f 70 --apu-skin-temp=70 &>/dev/null
-            else ryzenadj -a 35000 -b 35000 -c 35000 --max-performance -f 70 --apu-skin-temp=70 &>/dev/null
+            then ryzenadj -a ${arg5}000 -b ${arg5}000 -c ${arg5}000 --max-performance -f $arg3 --apu-skin-temp=$arg4 &>/dev/null
+            else ryzenadj -a ${arg1}000 -b ${arg1}000 -c ${arg1}000 --max-performance -f $arg3 --apu-skin-temp=$arg4 &>/dev/null
             fi
         else
             echo 'low-power' >/sys/firmware/acpi/platform_profile
             sleep 20
-            ryzenadj -b 20000 -b 20000 -c 20000 --power-saving -f 70 --apu-skin-temp=70 &>/dev/null
+            ryzenadj -b ${arg2}000 -b ${arg2}000 -c ${arg2}000 --power-saving -f $arg3 --apu-skin-temp=$arg4 &>/dev/null
         fi ;;
     --off)
-        echo 'balanced' >/sys/firmware/acpi/platform_profile ;;
+        echo '$arg6' >/sys/firmware/acpi/platform_profile ;;
 esac
 
 exit 0
 EOF
-        # Honor Magicbook 5500U
-        elif [[ $(</sys/class/dmi/id/product_version) == M1060 ]] ; then
+
+        cat << EOF > $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_off.service
+[Unit]
+Description=Ryzenadj helper off service
+DefaultDependencies=no
+Before=poweroff.target halt.target reboot.target
+
+[Service]
+Type=exec
+ExecStart=/bin/echo
+ExecStop=/usr/local/bin/ryzenadj_helper --off
+
+[Install]
+WantedBy=poweroff.target halt.target reboot.target
+EOF
+
+        systemctl enable --now ryzenadj_helper_off.service 2>/dev/null
+        else
+            if [[ $(</sys/class/dmi/id/product_version) == M1060 ]] ; then
+                [[ -z $arg1 ]] && arg1=25
+                [[ -z $arg2 ]] && arg2=15
+            fi
+            [[ -n $arg1 ]] && arg1="-a ${arg1}000 -b ${arg1}000 -c ${arg1}000"
+            [[ -n $arg2 ]] && arg2="-b ${arg2}000 -b ${arg2}000 -c ${arg2}000"
             cat << EOF > $INSTALL_DIR/bin/ryzenadj_helper
 #!/usr/bin/env bash
 
@@ -101,15 +204,14 @@ case \$1 in
     --on)
         sleep 1
         if [[ \$(</sys/class/power_supply/ACAD/online) == "1" ]]
-        then ryzenadj -a 25000 -b 25000 -c 25000 --max-performance -f 70 --apu-skin-temp=70 &>/dev/null
-        else ryzenadj -b 15000 -b 15000 -c 15000 --power-saving -f 70 --apu-skin-temp=70 &>/dev/null
+        then ryzenadj $arg1 --max-performance -f $arg3 --apu-skin-temp=$arg4 &>/dev/null
+        else ryzenadj $arg2 --power-saving -f $arg3 --apu-skin-temp=$arg4 &>/dev/null
         fi ;;
-    --off)
-        systemctl disable --now ryzenadj_helper_off.service 2>/dev/null ;;
 esac
 
 exit 0
 EOF
+
         fi
         chmod 755 $INSTALL_DIR/bin/ryzenadj_helper
 
@@ -129,22 +231,7 @@ ExecStart=/usr/local/bin/ryzenadj_helper --on
 WantedBy=multi-user.target
 EOF
 
-        cat << EOF > $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_off.service
-[Unit]
-Description=Ryzenadj helper off service
-DefaultDependencies=no
-Before=poweroff.target halt.target reboot.target
-
-[Service]
-Type=exec
-ExecStart=/bin/echo
-ExecStop=/usr/local/bin/ryzenadj_helper --off
-
-[Install]
-WantedBy=poweroff.target halt.target reboot.target
-EOF
         systemctl enable --now ryzenadj_helper_on.service 2>/dev/null
-        systemctl enable --now ryzenadj_helper_off.service 2>/dev/null
         echo "ryzenadj_helper_install done"
     }
 
@@ -157,18 +244,17 @@ EOF
     }
 
     suspend_timer_install() {
-        if command -v systemd-run rtcwake &>/dev/null ; then
-            cat << EOF > $INSTALL_DIR/bin/suspend-then-shutdown
+        [[ -z $arg9 ]] && arg9=180
+        arg9=$(( arg9 * 60 ))
+        cat << EOF > $INSTALL_DIR/bin/suspend-then-shutdown
 #!/usr/bin/env sh
 
-delay=10800
+delay=$arg9
 start=\$(date +%s)
-modprobe -r ryzen_smu
 for script in /usr/lib/systemd/system-sleep/* ; do
     [ -x "\$script" ] && "\$script" pre
 done
 rtcwake -s \$delay -m mem
-modprobe ryzen_smu
 for script in /usr/lib/systemd/system-sleep/* ; do
     [ -x "\$script" ] && "\$script" post
 done
@@ -177,9 +263,9 @@ if [ \$((end-start)) -ge \$delay ] ; then
     systemd-run --on-active=5 systemctl poweroff
 fi
 EOF
-            chmod 755 $INSTALL_DIR/bin/suspend-then-shutdown
+        chmod 755 $INSTALL_DIR/bin/suspend-then-shutdown
 
-            cat << EOF > $INSTALL_DIR/lib/systemd/system/systemd-suspend.service
+        cat << EOF > $INSTALL_DIR/lib/systemd/system/systemd-suspend.service
 [Unit]
 Description=Suspend; Shutdown if not used for a period of time
 
@@ -187,10 +273,8 @@ Description=Suspend; Shutdown if not used for a period of time
 Type=oneshot
 ExecStart=/usr/local/bin/suspend-then-shutdown
 EOF
-            echo "suspend_timer_install done"
-        else
-            echo "For suspend_timer_install needed systemd-run rtcwake"
-        fi
+
+        echo "suspend_timer_install done"
     }
 
     suspend_timer_uninstall() {
@@ -198,9 +282,9 @@ EOF
         echo "suspend_timer_uninstall done"
     }
 
-    # shellcheck disable=SC2221,SC2222
-    case $1 in
-        *i|*install|*reinstall)
+    COMMAND_ARGS=${1//-/}
+    case $COMMAND_ARGS in
+        i|install)
             if command -v apt-get &>/dev/null ; then
                 apt-get update
                 apt-get install dkms git build-essential linux-headers-"$(uname -r)" cmake libpci-dev mokutil -y
@@ -212,18 +296,19 @@ EOF
 #             elif command -v zypper &>/dev/null ; then
 #                 zypper in dkms git linux-headers cmake gcc14-c++ pciutils-devel mokutil -y
             fi
+            custom_args_ryzenadj
             ryzenadj_install
-            ryzensmu_install
+            [[ ! $arg7 =~ ^[n|no]$ ]] && ryzen_smu_install
             ryzenadj_helper_install
-            suspend_timer_install
+            [[ ! $arg8 =~ ^[n|no]$ ]] && suspend_timer_install
         ;;
-        *u|*uninstall)
+        u|uninstall)
             ryzenadj_uninstall
-            ryzensmu_uninstall
+            ryzen_smu_uninstall
             ryzenadj_helper_uninstall
             suspend_timer_uninstall
         ;;
-        *) echo "For help, please use './ryzenadj_helper_installer help'" ;;
+        *) echo "${translations[For help, please use './ryzenadj_helper_installer help']}" ;;
     esac
 
     exit 0
