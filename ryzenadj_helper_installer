@@ -301,12 +301,12 @@ EOF
         i|install)
             if command -v apt-get &>/dev/null ; then
                 apt-get update
-                apt-get install dkms git build-essential linux-headers-"$(uname -r)" cmake libpci-dev mokutil -y
+                apt-get install dkms git build-essential linux-headers-"$(uname -r)" cmake libpci-dev mokutil util-linux -y
             elif command -v dnf &>/dev/null ; then
-                dnf install dkms git kernel-headers cmake gcc-c++ pciutils-devel mokutil -y
+                dnf install dkms git kernel-headers cmake gcc-c++ pciutils-devel mokutil util-linux -y
             elif command -v pacman &>/dev/null ; then
                 pacman -S -y -y
-                pacman -S dkms git linux-headers base-devel pciutils cmake mokutil --noconfirm
+                pacman -S dkms git linux-headers base-devel pciutils cmake mokutil util-linux --noconfirm
 #             elif command -v zypper &>/dev/null ; then
 #                 zypper in dkms git linux-headers cmake gcc14-c++ pciutils-devel mokutil -y
             fi
