@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+
+if [[ -z $1 ]] || [[ $1 =~ (h|help) ]] ; then
+    echo "Usage: ./ryzenadj_helper_installer <command>
+
+<commands>
+  i|install : Installation
+  u|uninstall : Deletes all files after installation
+
+  WARNING: Superuser rights required
+"
+    exit 0
+fi
+
+if [[ $(id -u) != "0" ]] ; then
+    echo "Superuser rights are required"
+    if command -v sudo &>/dev/null ; then sudo ./"$0" "$@"
+    elif command -v doas &>/dev/null ; then doas ./"$0" "$@"
+    else echo "sudo or doas not found!"
+    fi
+else
+    SCRIPTS_PATH="$(cd "$(dirname "$0")" && pwd)"
+    cd "$SCRIPTS_PATH" || exit 1
+    INSTALL_DIR="/usr/local/"
+    [[ ! -d $INSTALL_DIR/bin ]] && mkdir -p $INSTALL_DIR/bin
+    [[ ! -d $INSTALL_DIR/lib/systemd/system ]] && mkdir -p $INSTALL_DIR/lib/systemd/system
+    [[ ! -d $INSTALL_DIR/lib/udev/rules.d ]] && mkdir -p $INSTALL_DIR/lib/udev/rules.d
+
+    ryzenadj_install() {
+        [[ -d RyzenAdj ]] && rm -r RyzenAdj
+        git clone https://github.com/Htylol/RyzenAdj.git
+        cd RyzenAdj || exit 1
+        rm -r win32
+        mkdir build && cd build || exit 1
+        cmake -DCMAKE_BUILD_TYPE=Release ..
+        make -j$(($(nproc) + 1))
+        mv ryzenadj $INSTALL_DIR/bin/ryzenadj
+        cd "$SCRIPTS_PATH" && rm -r RyzenAdj || exit 1
+        echo "ryzenadj_install done"
+    }
+
+    ryzenadj_uninstall() {
+        rm -f $INSTALL_DIR/bin/ryzenadj
+        echo "ryzenadj_uninstall done"
+    }
+
+    ryzensmu_install() {
+        [[ -d ryzen_smu ]] && rm -r ryzen_smu
+        git clone https://github.com/Htylol/ryzen_smu.git
+        cd ryzen_smu || exit 1
+        ryzensmu_uninstall
+        make dkms-install
+        cd "$SCRIPTS_PATH" && rm -r ryzen_smu || exit 1
+        echo "ryzensmu_install done"
+    }
+
+    ryzensmu_uninstall() {
+        while true ; do
+            IFS='/' read -r -a DKMS_STATUS < <(dkms status | grep ryzen_smu)
+            if [[ -n $DKMS_STATUS ]]
+            then dkms remove ryzen_smu/${DKMS_STATUS[1]/[,:]*/} --all
+            else break
+            fi
+        done
+        echo "ryzensmu_uninstall done"
+    }
+
+    ryzenadj_helper_install() {
+        # Thinkbook G6+ AHP
+        if [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
+            cat << EOF > $INSTALL_DIR/bin/ryzenadj_helper
+#!/usr/bin/env bash
+
+case \$1 in
+    --on)
+        if [[ \$(</sys/class/power_supply/ACAD/online) == "1" ]]; then
+            echo 'performance' >/sys/firmware/acpi/platform_profile
+            sleep 5
+            if [[ \$(</sys/class/power_supply/ucsi-source-psy-USBC000:001/charge_type) == "Standard" ]] \\
+            || [[ \$(</sys/class/power_supply/ucsi-source-psy-USBC000:002/charge_type) == "Standard" ]]
+            then ryzenadj -a 25000 -b 25000 -c 25000 --max-performance -f 70 --apu-skin-temp=70 &>/dev/null
+            else ryzenadj -a 35000 -b 35000 -c 35000 --max-performance -f 70 --apu-skin-temp=70 &>/dev/null
+            fi
+        else
+            echo 'low-power' >/sys/firmware/acpi/platform_profile
+            sleep 20
+            ryzenadj -b 20000 -b 20000 -c 20000 --power-saving -f 70 --apu-skin-temp=70 &>/dev/null
+        fi ;;
+    --off)
+        echo 'balanced' >/sys/firmware/acpi/platform_profile ;;
+esac
+
+exit 0
+EOF
+        # Honor Magicbook 5500U
+        elif [[ $(</sys/class/dmi/id/product_version) == M1060 ]] ; then
+            cat << EOF > $INSTALL_DIR/bin/ryzenadj_helper
+#!/usr/bin/env bash
+
+case \$1 in
+    --on)
+        sleep 1
+        if [[ \$(</sys/class/power_supply/ACAD/online) == "1" ]]
+        then ryzenadj -a 25000 -b 25000 -c 25000 --max-performance -f 70 --apu-skin-temp=70 &>/dev/null
+        else ryzenadj -b 15000 -b 15000 -c 15000 --power-saving -f 70 --apu-skin-temp=70 &>/dev/null
+        fi ;;
+    --off)
+        systemctl disable --now ryzenadj_helper_off.service 2>/dev/null ;;
+esac
+
+exit 0
+EOF
+        fi
+        chmod 755 $INSTALL_DIR/bin/ryzenadj_helper
+
+        cat << EOF > $INSTALL_DIR/lib/udev/rules.d/ryzenadj_helper.rules
+ACTION=="change", SUBSYSTEM=="drm", DEVPATH=="*/drm/card1", RUN+="/bin/bash -c 'systemctl restart ryzenadj_helper_on.service'"
+EOF
+
+        cat << EOF > $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_on.service
+[Unit]
+Description=Ryzenadj helper on service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ryzenadj_helper --on
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        cat << EOF > $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_off.service
+[Unit]
+Description=Ryzenadj helper off service
+DefaultDependencies=no
+Before=poweroff.target halt.target reboot.target
+
+[Service]
+Type=exec
+ExecStart=/bin/echo
+ExecStop=/usr/local/bin/ryzenadj_helper --off
+
+[Install]
+WantedBy=poweroff.target halt.target reboot.target
+EOF
+        systemctl enable --now ryzenadj_helper_on.service 2>/dev/null
+        systemctl enable --now ryzenadj_helper_off.service 2>/dev/null
+        echo "ryzenadj_helper_install done"
+    }
+
+    ryzenadj_helper_uninstall() {
+        systemctl disable --now ryzenadj_helper_on.service 2>/dev/null
+        systemctl disable --now ryzenadj_helper_off.service 2>/dev/null
+        rm -f $INSTALL_DIR/bin/ryzenadj_helper $INSTALL_DIR/lib/udev/rules.d/ryzenadj_helper.rules \
+        $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_on.service $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_off.service
+        echo "ryzenadj_helper_uninstall done"
+    }
+
+    suspend_timer_install() {
+        if command -v systemd-run rtcwake &>/dev/null ; then
+            cat << EOF > $INSTALL_DIR/bin/suspend-then-shutdown
+#!/usr/bin/env sh
+
+delay=10800
+start=\$(date +%s)
+modprobe -r ryzen_smu
+for script in /usr/lib/systemd/system-sleep/* ; do
+    [ -x "\$script" ] && "\$script" pre
+done
+rtcwake -s \$delay -m mem
+modprobe ryzen_smu
+for script in /usr/lib/systemd/system-sleep/* ; do
+    [ -x "\$script" ] && "\$script" post
+done
+end=\$(date +%s)
+if [ \$((end-start)) -ge \$delay ] ; then
+    systemd-run --on-active=5 systemctl poweroff
+fi
+EOF
+            chmod 755 $INSTALL_DIR/bin/suspend-then-shutdown
+
+            cat << EOF > $INSTALL_DIR/lib/systemd/system/systemd-suspend.service
+[Unit]
+Description=Suspend; Shutdown if not used for a period of time
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/suspend-then-shutdown
+EOF
+            echo "suspend_timer_install done"
+        else
+            echo "For suspend_timer_install needed systemd-run rtcwake"
+        fi
+    }
+
+    suspend_timer_uninstall() {
+        rm -f $INSTALL_DIR/bin/suspend-then-shutdown $INSTALL_DIR/lib/systemd/system/systemd-suspend.service
+        echo "suspend_timer_uninstall done"
+    }
+
+    # shellcheck disable=SC2221,SC2222
+    case $1 in
+        *i|*install|*reinstall)
+            if command -v apt-get &>/dev/null ; then
+                apt-get update
+                apt-get install dkms git build-essential linux-headers-"$(uname -r)" cmake libpci-dev mokutil -y
+            elif command -v dnf &>/dev/null ; then
+                dnf install dkms git kernel-headers cmake gcc-c++ pciutils-devel mokutil -y
+            elif command -v pacman &>/dev/null ; then
+                pacman -S -y -y
+                pacman -S dkms git linux-headers base-devel pciutils cmake mokutil --noconfirm
+#             elif command -v zypper &>/dev/null ; then
+#                 zypper in dkms git linux-headers cmake gcc14-c++ pciutils-devel mokutil -y
+            fi
+            ryzenadj_install
+            ryzensmu_install
+            ryzenadj_helper_install
+            suspend_timer_install
+        ;;
+        *u|*uninstall)
+            ryzenadj_uninstall
+            ryzensmu_uninstall
+            ryzenadj_helper_uninstall
+            suspend_timer_uninstall
+        ;;
+        *) echo "For help, please use './ryzenadj_helper_installer help'" ;;
+    esac
+
+    exit 0
+fi
