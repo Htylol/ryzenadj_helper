@@ -9,7 +9,8 @@ if ! command -v systemd-run systemctl &>/dev/null ; then
     exit 1
 fi
 
-if [[ -z $1 ]] || [[ $1 =~ (h|help) ]] ; then
+COMMAND_ARGS=${1//-/}
+if [[ -z $COMMAND_ARGS ]] || [[ $COMMAND_ARGS =~ ^(h|help)$ ]] ; then
     echo "${translations[Usage: ./ryzenadj_helper_installer <command>
 
 <commands>
@@ -41,8 +42,8 @@ else
                 arg2_info=" (${translations[default]} 15)"
             # Thinkbook G6+ AHP
             elif [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
-                arg1_info=" (${translations[(default]} 35)"
-                arg2_info=" (${translations[(default]} 20)"
+                arg1_info=" (${translations[default]} 35)"
+                arg2_info=" (${translations[default]} 20)"
             fi
 
             IFS=' ' read -r -a SECUREBOOT_STATUS < <(mokutil --sb-state)
@@ -120,14 +121,13 @@ else
 
     ryzenadj_uninstall() {
         rm -f $INSTALL_DIR/bin/ryzenadj
-        echo "ryzenadj_uninstall done"
+        [[ $COMMAND_ARGS =~ ^(u|uninstall)$ ]] && echo "ryzenadj_uninstall done"
     }
 
     ryzen_smu_install() {
         [[ -d ryzen_smu ]] && rm -r ryzen_smu
         git clone https://github.com/Htylol/ryzen_smu.git
         cd ryzen_smu || exit 1
-        ryzen_smu_uninstall
         make dkms-install
         cd "$SCRIPTS_PATH" && rm -r ryzen_smu || exit 1
         if [[ -e /sys/module/amd_pmc ]] ; then
@@ -153,7 +153,7 @@ EOF
             fi
         done
         rm -f /usr/lib/systemd/system-sleep/ryzen_smu
-        echo "ryzen_smu_uninstall done"
+        [[ $COMMAND_ARGS =~ ^(u|uninstall)$ ]] && echo "ryzen_smu_uninstall done"
     }
 
     ryzenadj_helper_install() {
@@ -251,7 +251,7 @@ EOF
         systemctl disable --now ryzenadj_helper_off.service 2>/dev/null
         rm -f $INSTALL_DIR/bin/ryzenadj_helper $INSTALL_DIR/lib/udev/rules.d/ryzenadj_helper.rules \
         $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_on.service $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_off.service
-        echo "ryzenadj_helper_uninstall done"
+        [[ $COMMAND_ARGS =~ ^(u|uninstall)$ ]] && echo "ryzenadj_helper_uninstall done"
     }
 
     suspend_timer_install() {
@@ -288,10 +288,16 @@ EOF
 
     suspend_timer_uninstall() {
         rm -f $INSTALL_DIR/bin/suspend-then-shutdown $INSTALL_DIR/lib/systemd/system/systemd-suspend.service
-        echo "suspend_timer_uninstall done"
+        [[ $COMMAND_ARGS =~ ^(u|uninstall)$ ]] && echo "suspend_timer_uninstall done"
     }
 
-    COMMAND_ARGS=${1//-/}
+    ryzenadj_helper_full_uninstall() {
+        ryzenadj_uninstall
+        ryzen_smu_uninstall
+        ryzenadj_helper_uninstall
+        suspend_timer_uninstall
+    }
+
     case $COMMAND_ARGS in
         i|install)
             if command -v apt-get &>/dev/null ; then
@@ -306,16 +312,14 @@ EOF
 #                 zypper in dkms git linux-headers cmake gcc14-c++ pciutils-devel mokutil -y
             fi
             custom_args_ryzenadj
+            ryzenadj_helper_full_uninstall
             ryzenadj_install
             [[ ! $arg7 =~ ^(n|no)$ ]] || [[ -n $CHECK_DKMS_SIGN ]] && ryzen_smu_install
             ryzenadj_helper_install
             [[ ! $arg8 =~ ^(n|no)$ ]] && suspend_timer_install
         ;;
         u|uninstall)
-            ryzenadj_uninstall
-            ryzen_smu_uninstall
-            ryzenadj_helper_uninstall
-            suspend_timer_uninstall
+            ryzenadj_helper_full_uninstall
         ;;
         *) echo "${translations[For help, please use './ryzenadj_helper_installer help']}" ;;
     esac
