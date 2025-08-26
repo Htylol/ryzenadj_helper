@@ -35,14 +35,14 @@ else
     [[ ! -d $INSTALL_DIR/lib/udev/rules.d ]] && mkdir -p $INSTALL_DIR/lib/udev/rules.d
 
     custom_args_ryzenadj() {
-            # Honor Magicbook 5500U
+            # Honor BMH-WCX9
             if [[ $(</sys/class/dmi/id/product_version) == M1060 ]] ; then
-                arg1_info=" ${translations[(default 25)]}"
-                arg2_info=" ${translations[(default 15)]}"
+                arg1_info=" (${translations[default]} 25)"
+                arg2_info=" (${translations[default]} 15)"
             # Thinkbook G6+ AHP
             elif [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
-                arg1_info=" ${translations[(default 35)]}"
-                arg2_info=" ${translations[(default 20)]}"
+                arg1_info=" (${translations[(default]} 35)"
+                arg2_info=" (${translations[(default]} 20)"
             fi
 
             IFS=' ' read -r -a SECUREBOOT_STATUS < <(mokutil --sb-state)
@@ -73,7 +73,7 @@ else
                 echo "${translations[Enter which profile to use (vantage) after reboot or shutdown, this is necessary for the second system, for example Windows]}"
                 echo "${translations[Available profiles: performance, balanced, low-power (balanced by default)]}:"
                 read -r arg6 && [[ -z $arg6 ]] && arg6=balanced
-                if [[ -n $arg6 ]] && [[ ! $arg6 =~ (performance|balanced|low-power) ]] ; then
+                if [[ -n $arg6 ]] && [[ ! $arg6 =~ ^(performance|balanced|low-power)$ ]] ; then
                     echo "${translations[Invalid argument used, exiting in 3 seconds]}"
                     sleep 3 && exit 1
                 fi
@@ -83,7 +83,7 @@ else
                 echo "${translations[Install the ryzen_smu kernel module? May improve compatibility with ryzenadj]}"
                 echo "${translations[Select y/yes or n/no (default no)]}:"
                 read -r arg7 && [[ -z $arg7 ]] && arg7=no
-                if [[ -n $arg7 ]] && [[ ! $arg7 =~ (y|yes|n|no) ]] ; then
+                if [[ -n $arg7 ]] && [[ ! $arg7 =~ ^(y|yes|n|no)$ ]] ; then
                     echo "${translations[Invalid argument used, exiting in 3 seconds]}"
                     sleep 3 && exit 1
                 fi
@@ -94,11 +94,11 @@ else
             echo "${translations[Select y/yes or n/no (default yes)]}:"
             read -r arg8 && [[ -z $arg8 ]] && arg8=yes
 
-            if [[ -n $arg8 ]] && [[ ! $arg8 =~ (y|yes|n|no) ]] ; then
+            if [[ -n $arg8 ]] && [[ ! $arg8 =~ ^(y|yes|n|no)$ ]] ; then
                 echo "${translations[Invalid argument used, exiting in 3 seconds]}"
                 sleep 3 && exit 1
             fi
-            if [[ $arg8 =~ (y|yes) ]] ; then
+            if [[ $arg8 =~ ^(y|yes)$ ]] ; then
                 echo "${translations[How long to turn off the device during long sleep in minutes (default 180)]}:"
                 read -r arg9 && [[ -z $arg9 ]] && arg9=180
                 arg9=$(( arg9 * 60 ))
