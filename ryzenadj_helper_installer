@@ -37,7 +37,7 @@ else
     custom_args_ryzenadj() {
             # Honor Magicbook 5500U
             if [[ $(</sys/class/dmi/id/product_version) == M1060 ]] ; then
-                arg1_info=" ${translations[(default 25)]})"
+                arg1_info=" ${translations[(default 25)]}"
                 arg2_info=" ${translations[(default 15)]}"
             # Thinkbook G6+ AHP
             elif [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
@@ -63,16 +63,16 @@ else
             echo "${translations[Enter the maximum TDP of the processor from the battery in watts]}$arg2_info:"
             read -r arg2
             echo "${translations[Enter the maximum allowed CPU temperature in Celsius (default 70)]}:"
-            read -r arg3
+            read -r arg3 && [[ -z $arg3 ]] && arg3=70
             echo "${translations[Enter the maximum allowed APU temperature in Celsius (default 70)]}:"
-            read -r arg4
+            read -r arg4 && [[ -z $arg4 ]] && arg4=70
 
             if [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
                 echo "${translations[Enter the maximum TDP of the processor from the power cable in watts from a weak charge (default 25)]}:"
-                read -r arg5
+                read -r arg5 && [[ -z $arg5 ]] && arg5=25
                 echo "${translations[Enter which profile to use (vantage) after reboot or shutdown, this is necessary for the second system, for example Windows]}"
                 echo "${translations[Available profiles: performance, balanced, low-power (balanced by default)]}:"
-                read -r arg6
+                read -r arg6 && [[ -z $arg6 ]] && arg6=balanced
                 if [[ -n $arg6 ]] && [[ ! $arg6 =~ (performance|balanced|low-power) ]] ; then
                     echo "${translations[Invalid argument used, exiting in 3 seconds]}"
                     sleep 3 && exit 1
@@ -81,26 +81,27 @@ else
 
             if [[ -z $CHECK_DKMS_SIGN ]] ; then
                 echo "${translations[Install the ryzen_smu kernel module? May improve compatibility with ryzenadj]}"
-                echo "${translations[Select y/yes or n/no (default yes)]}:"
-                read -r arg7
+                echo "${translations[Select y/yes or n/no (default no)]}:"
+                read -r arg7 && [[ -z $arg7 ]] && arg7=no
                 if [[ -n $arg7 ]] && [[ ! $arg7 =~ (y|yes|n|no) ]] ; then
                     echo "${translations[Invalid argument used, exiting in 3 seconds]}"
                     sleep 3 && exit 1
                 fi
             fi
 
-            echo "${translations[Add a timer to the system so that the device turns off automatically during prolonged sleep]}"
+            echo "${translations[Add rtcwake to the system so that the device automatically turns off after a long sleep]}"
             echo "${translations[Similar to hibernation, but without saving the current session]}"
             echo "${translations[Select y/yes or n/no (default yes)]}:"
-            read -r arg8
+            read -r arg8 && [[ -z $arg8 ]] && arg8=yes
 
             if [[ -n $arg8 ]] && [[ ! $arg8 =~ (y|yes|n|no) ]] ; then
                 echo "${translations[Invalid argument used, exiting in 3 seconds]}"
                 sleep 3 && exit 1
             fi
-            if [[ -z $arg8 ]] || [[ $arg8 =~ (y|yes) ]] ; then
+            if [[ $arg8 =~ (y|yes) ]] ; then
                 echo "${translations[How long to turn off the device during long sleep in minutes (default 180)]}:"
-                read -r arg9
+                read -r arg9 && [[ -z $arg9 ]] && arg9=180
+                arg9=$(( arg9 * 60 ))
             fi
     }
 
@@ -151,18 +152,14 @@ EOF
             else break
             fi
         done
+        rm -f /usr/lib/systemd/system-sleep/ryzen_smu
         echo "ryzen_smu_uninstall done"
     }
 
     ryzenadj_helper_install() {
-        [[ -z $arg3 ]] && arg3=70
-        [[ -z $arg4 ]] && arg4=70
-
         if [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
             [[ -z $arg1 ]] && arg1=35
             [[ -z $arg2 ]] && arg2=20
-            [[ -z $arg5 ]] && arg5=25
-            [[ -z $arg6 ]] && arg6=balanced
             cat << EOF > $INSTALL_DIR/bin/ryzenadj_helper
 #!/usr/bin/env bash
 
@@ -258,8 +255,6 @@ EOF
     }
 
     suspend_timer_install() {
-        [[ -z $arg9 ]] && arg9=180
-        arg9=$(( arg9 * 60 ))
         cat << EOF > $INSTALL_DIR/bin/suspend-then-shutdown
 #!/usr/bin/env sh
 
@@ -312,9 +307,9 @@ EOF
             fi
             custom_args_ryzenadj
             ryzenadj_install
-            [[ ! $arg7 =~ ^[n|no]$ ]] && ryzen_smu_install
+            [[ ! $arg7 =~ ^(n|no)$ ]] || [[ -n $CHECK_DKMS_SIGN ]] && ryzen_smu_install
             ryzenadj_helper_install
-            [[ ! $arg8 =~ ^[n|no]$ ]] && suspend_timer_install
+            [[ ! $arg8 =~ ^(n|no)$ ]] && suspend_timer_install
         ;;
         u|uninstall)
             ryzenadj_uninstall
