@@ -240,6 +240,15 @@ EOF
 ACTION=="change", SUBSYSTEM=="power_supply", DEVPATH=="*/power_supply/$POWER_SUPPLY", RUN+="/bin/bash -c 'systemctl restart ryzenadj_helper_on.service'"
 EOF
 
+        cat << EOF > /usr/lib/systemd/system-sleep/ryzenadj_helper
+#!/usr/bin/env sh
+
+case \$1 in
+    post) systemctl restart ryzenadj_helper_on.service ;;
+esac
+EOF
+        chmod 755 /usr/lib/systemd/system-sleep/ryzenadj_helper
+
         cat << EOF > $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_on.service
 [Unit]
 Description=Ryzenadj helper on service
@@ -260,7 +269,8 @@ EOF
         systemctl disable --now ryzenadj_helper_on.service 2>/dev/null
         systemctl disable --now ryzenadj_helper_off.service 2>/dev/null
         rm -f $INSTALL_DIR/bin/ryzenadj_helper $INSTALL_DIR/lib/udev/rules.d/ryzenadj_helper.rules \
-        $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_on.service $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_off.service
+        $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_on.service $INSTALL_DIR/lib/systemd/system/ryzenadj_helper_off.service \
+        /usr/lib/systemd/system-sleep/ryzenadj_helper
         [[ $COMMAND_ARGS =~ ^(u|uninstall)$ ]] && echo "ryzenadj_helper_uninstall done"
     }
 
