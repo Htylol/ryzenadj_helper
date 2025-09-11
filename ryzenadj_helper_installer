@@ -71,8 +71,6 @@ else
             read -r arg4 && [[ -z $arg4 ]] && arg4="70"
 
             if [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
-                echo "${translations[Enter the maximum TDP of the processor from the power cable in watts from a weak charge (default 25)]}:"
-                read -r arg5 && [[ -z $arg5 ]] && arg5="25"
                 echo "${translations[Enter which profile to use (vantage) after reboot or shutdown, this is necessary for the second system, for example Windows]}"
                 echo "${translations[Available profiles: performance, balanced, low-power (balanced by default)]}:"
                 read -r arg6 && [[ -z $arg6 ]] && arg6="balanced"
@@ -178,11 +176,7 @@ case \$1 in
         if [[ \$(</sys/class/power_supply/$POWER_SUPPLY/online) == "1" ]]; then
             echo 'performance' >/sys/firmware/acpi/platform_profile
             sleep 5
-            if [[ \$(</sys/class/power_supply/ucsi-source-psy-USBC000:001/charge_type) == "Standard" ]] \\
-            || [[ \$(</sys/class/power_supply/ucsi-source-psy-USBC000:002/charge_type) == "Standard" ]]
-            then ryzenadj -a ${arg5}000 -b ${arg5}000 -c ${arg5}000 --max-performance -f $arg3 --apu-skin-temp=$arg4 &>/dev/null
-            else ryzenadj -a ${arg1}000 -b ${arg1}000 -c ${arg1}000 --max-performance -f $arg3 --apu-skin-temp=$arg4 &>/dev/null
-            fi
+            ryzenadj -a ${arg1}000 -b ${arg1}000 -c ${arg1}000 --max-performance -f $arg3 --apu-skin-temp=$arg4 &>/dev/null
         else
             echo 'low-power' >/sys/firmware/acpi/platform_profile
             sleep 20
