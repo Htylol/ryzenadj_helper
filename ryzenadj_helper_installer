@@ -273,6 +273,7 @@ EOF
 #!/usr/bin/env sh
 
 delay=$arg9
+
 start=\$(date +%s)
 for script in /usr/lib/systemd/system-sleep/* ; do
     [ -x "\$script" ] && "\$script" pre
@@ -282,8 +283,11 @@ for script in /usr/lib/systemd/system-sleep/* ; do
     [ -x "\$script" ] && "\$script" post
 done
 end=\$(date +%s)
-if [ \$((end-start)) -ge \$delay ] ; then
-    systemd-run --on-active=5 systemctl poweroff
+if [ \$((end-start)) -ge "\$delay" ] ; then
+    if [ \$(</sys/class/power_supply/ACAD/online) == "0" ]
+    then systemd-run --on-active=5 systemctl poweroff
+    else systemd-run --on-active=5 systemctl suspend
+    fi
 fi
 EOF
         chmod 755 $INSTALL_DIR/bin/suspend-then-shutdown
