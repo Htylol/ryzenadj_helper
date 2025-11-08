@@ -4,9 +4,201 @@ SCRIPTS_PATH="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=/dev/null
 source "$SCRIPTS_PATH/translations"
 
-if ! command -v systemd-run systemctl &>/dev/null ; then
-    echo "${translations[There is no systemd-run systemctl in the system, without it it will not work]}"
-    exit 1
+if grep -q chromeos /etc/os-release ; then
+    [[ ! -d /usr/local/bin ]] && mkdir -p /usr/local/bin
+    # Honor BMH-WCX9
+    if [[ $(</sys/class/dmi/id/product_version) == "M1060" ]] ; then
+            cat << EOF1 > /usr/local/bin/ryzenadj_helper
+#!/usr/bin/env bash
+
+if [[ ! -f /etc/init/ryzenadj_helper.conf ]] ; then
+        cat << EOF > /etc/init/ryzenadj_helper.conf
+start on started startup
+
+task
+
+exec /usr/local/bin/ryzenadj_helper
+EOF
+
+#       echo '
+#ControllerMode = bredr
+#AutoEnable = true' >> /etc/bluetooth/main.conf
+fi
+
+if [[ ! -f /etc/udev/rules.d/ryzenadj_helper.rules ]] ; then
+        cat << EOF > /etc/udev/rules.d/ryzenadj_helper.rules
+ACTION=="change", SUBSYSTEM=="power_supply", DEVPATH=="*/power_supply/A*", RUN+="/usr/local/bin/ryzenadj_helper"
+ACTION=="change", SUBSYSTEM=="drm", DEVPATH=="*/drm/card*", RUN+="/usr/local/bin/ryzenadj_helper"
+#ACTION=="add", SUBSYSTEM=="block", DEVPATH=="*usb*", RUN+="/usr/local/bin/ryzenadj_helper --usb"
+\EOF
+fi
+
+if [[ ! -f /run/ryzenadj_helper_boot ]] ; then
+        chattr +i /media/removable
+        amixer -c 0 sset IEC958 on
+        echo 'powersave' | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor &>/dev/null
+        echo '75 80' | tee /sys/devices/platform/huawei-wmi/charge_control_thresholds &>/dev/null
+        echo '1' | tee /sys/module/snd_hda_intel/parameters/power_save &>/dev/null
+        echo 'Y' | tee /sys/module/snd_hda_intel/parameters/power_save_controller &>/dev/null
+        echo '0' > /var/lib/power_manager/disable_dark_resume
+        echo '10800' > /var/lib/power_manager/shutdown_from_suspend_sec
+        restart powerd
+        echo '1' > /run/ryzenadj_helper_boot
+fi
+
+[[ -n \$1 ]] && case \$1 in
+        --usb)
+                chattr -i /media/removable
+                rmdir /media/removable/*
+                count=0
+                while true ; do
+                        ((++count))
+                        if [[ \$count == 10 ]] ; then
+                                chattr +i /media/removable
+                                exit 0
+                        fi
+                        sleep 1
+                done &
+                exit 0
+                ;;
+esac
+
+ryzenadj_set() {
+        if [[ ! -f /run/ryzenadj_helper_set ]] ; then
+                if [[ \$(</sys/class/power_supply/A*/online) == "1" ]]
+                then ryzenadj -a 22500 -b 22500 -c 22500 --max-performance -f 70 --apu-skin-temp=70 &>/dev/null
+                else ryzenadj -a 15000 -b 15000 -c 15000 --power-saving -f 70 --apu-skin-temp=70 &>/dev/null
+                fi
+                echo '1' > /run/ryzenadj_helper_set
+                sleep 1
+                rm /run/ryzenadj_helper_set
+        fi
+}
+
+sleep 1
+
+if [[ \$(</sys/class/power_supply/A*/online) == "1" ]] ; then
+        echo 'balance_performance' | tee /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference &>/dev/null
+        echo '230' | tee /sys/class/backlight/amdgpu_bl0/brightness &>/dev/null
+        ryzenadj_set
+else
+        echo 'balance_power' | tee /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference &>/dev/null
+        echo '204' | tee /sys/class/backlight/amdgpu_bl0/brightness &>/dev/null
+        ryzenadj_set
+fi &
+
+exit 0
+EOF1
+    # Thinkbook G6+ AHP
+    elif [[ $(</sys/class/dmi/id/product_version) == ThinkBook\ 1*\ G6+\ AHP ]] ; then
+            cat << EOF1 > /usr/local/bin/ryzenadj_helper
+#!/usr/bin/env bash
+
+if [[ ! -f /etc/init/ryzenadj_helper.conf ]] ; then
+        cat << EOF > /etc/init/ryzenadj_helper.conf
+start on started startup
+
+task
+
+exec /usr/local/bin/ryzenadj_helper
+EOF
+fi
+
+if [[ ! -f /etc/init/ryzenadj_helper_off.conf ]] ; then
+        cat << EOF > /etc/init/ryzenadj_helper.conf
+start on runlevel [06]
+
+task
+
+exec /usr/local/bin/ryzenadj_helper --off
+EOF
+fi
+
+if [[ ! -f /etc/udev/rules.d/ryzenadj_helper.rules ]] ; then
+        cat << EOF > /etc/udev/rules.d/ryzenadj_helper.rules
+ACTION=="change", SUBSYSTEM=="power_supply", DEVPATH=="*/power_supply/A*", RUN+="/usr/local/bin/ryzenadj_helper"
+ACTION=="change", SUBSYSTEM=="drm", DEVPATH=="*/drm/card*", RUN+="/usr/local/bin/ryzenadj_helper"
+#ACTION=="add", SUBSYSTEM=="block", DEVPATH=="*usb*", RUN+="/usr/local/bin/ryzenadj_helper --usb"
+EOF
+fi
+
+if [[ ! -f /run/ryzenadj_helper_pp ]] ; then
+        ryzenadj_helper_pp=\$(</sys/firmware/acpi/platform_profile)
+        echo "\$ryzenadj_helper_pp" > /run/ryzenadj_helper_pp
+fi
+
+if [[ ! -f /run/ryzenadj_helper_boot ]] ; then
+        chattr +i /media/removable
+        amixer -c 0 sset IEC958 on
+        echo 'powersave' | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor >/dev/null
+        echo '1' | tee /sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/conservation_mode >/dev/null
+        echo '1' | tee /sys/module/snd_hda_intel/parameters/power_save >/dev/null
+        echo 'Y' | tee /sys/module/snd_hda_intel/parameters/power_save_controller >/dev/null
+        echo '0' > /var/lib/power_manager/disable_dark_resume
+        echo '10800' > /var/lib/power_manager/shutdown_from_suspend_sec
+        restart powerd
+        echo '1' > /run/ryzenadj_helper_boot
+fi
+
+[[ -n \$1 ]] && case \$1 in
+        --usb)
+                chattr -i /media/removable
+                rmdir /media/removable/*
+                count=0
+                while true ; do
+                        ((++count))
+                        if [[ \$count == 10 ]] ; then
+                                chattr +i /media/removable
+                                exit 0
+                        fi
+                        sleep 1
+                done &
+                exit 0
+                ;;
+        --off)
+                ryzenadj_helper_pp=\$(</run/ryzenadj_helper_pp)
+                echo "\$ryzenadj_helper_pp" > /sys/firmware/acpi/platform_profile
+                exit 0
+                ;;
+esac
+
+ryzenadj_set() {
+        if [[ ! -f /run/ryzenadj_helper_set ]] ; then
+                if [[ \$(</sys/class/power_supply/A*/online) == "1" ]]
+                then ryzenadj -a 30000 -b 30000 -c 30000 --max-performance -f 70 --apu-skin-temp=70 &>/dev/null
+                else ryzenadj -a 20000 -b 20000 -c 20000 --power-saving -f 70 --apu-skin-temp=70 &>/dev/null
+                fi
+                echo '1' > /run/ryzenadj_helper_set
+                sleep 1
+                rm /run/ryzenadj_helper_set
+        fi
+}
+
+sleep 1
+
+if [[ \$(</sys/class/power_supply/A*/online) == "1" ]] ; then
+        echo 'performance' | tee /sys/firmware/acpi/platform_profile >/dev/null
+        echo 'balance_performance' | tee /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference >/dev/null
+        echo '230' | tee /sys/class/backlight/amdgpu_bl0/brightness >/dev/null
+        sleep 5
+        ryzenadj_set
+else
+        echo 'low-power' | tee /sys/firmware/acpi/platform_profile >/dev/null
+        echo 'balance_power' | tee /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference >/dev/null
+        echo '204' | tee /sys/class/backlight/amdgpu_bl0/brightness >/dev/null
+        sleep 20
+        ryzenadj_set
+fi &
+
+exit 0
+EOF1
+    fi
+    exit 0
+else
+    if ! command -v systemd-run systemctl &>/dev/null ; then
+        echo "${translations[There is no systemd-run systemctl in the system, without it it will not work]}"
+        exit 1
+    fi
 fi
 
 COMMAND_ARGS=${1//-/}
